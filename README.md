@@ -4,7 +4,6 @@
 ROS2-based DBSCAN Clustering made for point cloud clustering in ROS environment. This code is developed based on [DBSCAN C++ Library](https://github.com/Eleobert/dbscan.git) by [Eleobert](https://github.com/Eleobert).
 
 ## Installation
-Before building this package, please install the [px4_msgs](https://github.com/PX4/px4_msgs) in advance.
 ```bash
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
