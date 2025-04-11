@@ -7,7 +7,7 @@ ROS2-based DBSCAN Clustering made for point cloud clustering in ROS environment.
 ```bash
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
-git clone [https://github.com/aktamaa/px4_keyboard_control.git](https://github.com/aktamaa/DBSCAN-ROS2.git)
+git clone https://github.com/aktamaa/DBSCAN-ROS2.git
 cd ..
 colcon build
 ```
