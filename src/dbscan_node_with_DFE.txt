@@ -1,0 +1,113 @@
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <numeric>
+#include <cmath>
+#include <unordered_map>
+#include "dbscan_ros/dbscan.hpp"
+
+class DBScanNode : public rclcpp::Node {
+public:
+    DBScanNode() : Node("dbscan_node") {
+        this->declare_parameter("eps", 0.5);
+        this->declare_parameter("min_pts", 5);
+        this->declare_parameter("std_threshold", 0.6);
+        this->declare_parameter("input_topic", "/glim_ros/points");
+        this->declare_parameter("output_topic", "/filtered_points");
+        this->declare_parameter("min_member", 20);
+
+        this->get_parameter("eps", eps_);
+        this->get_parameter("min_pts", min_pts_);
+        this->get_parameter("std_threshold", std_threshold_);
+        this->get_parameter("input_topic", input_topic_);
+        this->get_parameter("output_topic", output_topic_);
+        this->get_parameter("min_member", min_member_);
+
+        subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+            input_topic_, rclcpp::QoS(10),
+            std::bind(&DBScanNode::pointcloud_callback, this, std::placeholders::_1)
+        );
+
+        publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic_, 10);
+
+        RCLCPP_INFO(this->get_logger(), "DBScanNode running. Subscribed to %s", input_topic_.c_str());
+    }
+
+private:
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
+    std::string input_topic_, output_topic_;
+    float eps_, std_threshold_;
+    int min_pts_;
+    int min_member_;
+
+    void pointcloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+        pcl::PointCloud<pcl::PointXYZI>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+        pcl::fromROSMsg(*msg, *pcl_cloud);
+    
+        std::vector<point3> points;
+        for (const auto& pt : pcl_cloud->points) {
+            if (!std::isnan(pt.x) && !std::isnan(pt.y) && !std::isnan(pt.z)) {
+                points.push_back({pt.x, pt.y, pt.z});
+            }
+        }
+    
+        auto span_data = std::span<const point3>(points);
+        auto clusters = dbscan(span_data, eps_, min_pts_);
+        auto labels = label(clusters, points.size());
+    
+        std::unordered_map<size_t, std::vector<size_t>> label_indices;
+        std::unordered_map<size_t, std::vector<float>> cluster_distances;
+    
+        for (size_t i = 0; i < labels.size(); ++i) {
+            float d = std::sqrt(points[i].x * points[i].x +
+                                points[i].y * points[i].y +
+                                points[i].z * points[i].z);
+            cluster_distances[labels[i]].push_back(d);
+            label_indices[labels[i]].push_back(i);
+        }
+    
+        std::unordered_set<size_t> filtered_indices;
+        for (const auto& [label, dists] : cluster_distances) {
+            if (label == 0 || dists.size() < static_cast<size_t>(min_member_)) {
+                continue; // Skip noise and small clusters
+            }
+    
+            float mean = std::accumulate(dists.begin(), dists.end(), 0.0f) / dists.size();
+            float sq_sum = std::inner_product(dists.begin(), dists.end(), dists.begin(), 0.0f);
+            float std_dev = std::sqrt(sq_sum / dists.size() - mean * mean);
+    
+            if (std_dev <= std_threshold_) {
+                filtered_indices.insert(label_indices[label].begin(), label_indices[label].end());
+            }
+        }
+    
+        pcl::PointCloud<pcl::PointXYZI> output_cloud;
+        for (size_t i : filtered_indices) {
+            const auto& pt = points[i];
+            pcl::PointXYZI pcl_pt;
+            pcl_pt.x = pt.x;
+            pcl_pt.y = pt.y;
+            pcl_pt.z = pt.z;
+            pcl_pt.intensity = 0.0f;
+            output_cloud.push_back(pcl_pt);
+        }
+    
+        output_cloud.header.frame_id = msg->header.frame_id;
+        sensor_msgs::msg::PointCloud2 output_msg;
+        pcl::toROSMsg(output_cloud, output_msg);
+        output_msg.header.stamp = msg->header.stamp;
+        publisher_->publish(output_msg);
+    
+        RCLCPP_INFO(this->get_logger(), "Published filtered point cloud with %zu points", output_cloud.size());
+    }
+};
+
+int main(int argc, char **argv) {
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<DBScanNode>());
+    rclcpp::shutdown();
+    return 0;
+}
