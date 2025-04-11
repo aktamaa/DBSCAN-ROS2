@@ -1,5 +1,5 @@
 # ROS2-based DBSCAN Clustering Package
-![GitHub last commit](https://img.shields.io/github/last-commit/aktamaa/px4_keyboard_control)
+![GitHub last commit](https://img.shields.io/github/last-commit/aktamaa/DBSCAN-ROS2)
 
 ROS2-based DBSCAN Clustering made for point cloud clustering in ROS environment. This code is developed based on [DBSCAN C++ Library](https://github.com/Eleobert/dbscan.git) by [Eleobert](https://github.com/Eleobert).
 
