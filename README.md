@@ -12,7 +12,7 @@ cd ..
 colcon build
 ```
 
-## Run The Nodes
+## Run The Node
 ```bash
 ros2 run dbscan_ros dbscan_node --ros-args -p eps:=0.2 -p min_pts:=5 -p std_threshold:=0.05 -p input_topic:=/ouster/points -p output_topic:=/clustered_points
 ```
